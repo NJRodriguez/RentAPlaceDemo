@@ -1,0 +1,6 @@
+/src/RentAPlaceDemo/bin
+/src/RentAPlaceDemo/obj
+/test/RentAPlaceDemo.Tests/bin
+/test/RentAPlaceDemo.Tests/obj
+/bin/
+/pulumi/node_modules/
