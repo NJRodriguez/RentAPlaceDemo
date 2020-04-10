@@ -23,6 +23,42 @@ for (let item of fs.readdirSync(siteDir)) {
     });
 }
 
+const iamForLambda = new aws.iam.Role("iamForLambda", {
+    assumeRolePolicy: `{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+`,
+});
+
+const csharpLambda = new aws.lambda.Function("aws-hellolambda-csharp", {
+    runtime: aws.lambda.DotnetCore2d1Runtime,
+    code: new pulumi.asset.AssetArchive({
+        "app": new pulumi.asset.FileArchive("../src/RentAPlaceDemo/bin/Debug/netcoreapp2.1/publish"),
+    }),
+    timeout: 5,
+    handler: "app::app.Functions::PostAsync",
+    role: iamForLambda.arn
+});
+
+// Define a new POST endpoint that just returns a 200 and "hello" in the body.
+const api = new awsx.apigateway.API("my-apigateway", {
+    routes: [{
+        path: "/enter",
+        method: "POST",
+        eventHandler: csharpLambda,
+    }],
+})
+
 // Create an S3 Bucket Policy to allow public read of all objects in bucket
 function publicReadPolicyForBucket(bucketName: string) {
   return JSON.stringify({
