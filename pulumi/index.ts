@@ -4,6 +4,7 @@ import * as awsx from "@pulumi/awsx";
 import * as fs from "fs"
 import * as mime from "mime"
 import * as path from "path"
+import * as config from "./utils/config"
 
 const urlReplaceString = "${API_URL}"
 
@@ -40,6 +41,18 @@ const csharpLambda = new aws.lambda.Function("aws-hellolambda-csharp", {
     handler: "RentAPlaceDemo::Functions::PostAsync",
     role: iamForLambda.arn
 });
+
+const rds = new aws.rds.Instance("my-rds", {
+  allocatedStorage: 20,
+  engine: "sqlserver-ex",
+  engineVersion: "14.00.3192.2.v1",
+  instanceClass: "db.t2.micro",
+  password: "foobarbaz",
+  storageType: "gp2",
+  username: "foo",
+})
+
+exports.rdsEndpoint = rds.endpoint;
 
 // Define a new POST endpoint that just returns a 200 and "hello" in the body.
 const api = new awsx.apigateway.API("my-apigateway", {
@@ -78,7 +91,7 @@ api.url.apply(urlString => {
           const nestedFilePath = path.join(filePath, nestedItem);
           const nestedFileName = `${item}/${nestedItem}`
           if (item === "js"){
-            const updatedJsPath = replaceUrlInJsFile(nestedFilePath, urlString);
+            const updatedJsPath = config.replaceUrlInJsFile(nestedFilePath, urlReplaceString, urlString);
             const obj = createS3Object(nestedFileName, updatedJsPath);
             // Once object is created in S3, delete temporary file with replaced values
             obj.id.apply(() => {
@@ -130,15 +143,4 @@ function createS3Object(fileName: string, filePath: string) {
     source: new pulumi.asset.FileAsset(filePath),     // use FileAsset to point to a file
     contentType: mime.getType(filePath) || undefined, // set the MIME type of the file
   });
-}
-
-function replaceUrlInJsFile(filePath: string, url: string) {
-  const fileAsString = fs.readFileSync(filePath, "utf-8");
-  const updatedFileAsString = fileAsString.replace(urlReplaceString, url);
-  const split = filePath.split("\\");
-  const fileName = split.pop();
-  const tmpFileName = `tmp-${fileName}`;
-  const tmpFilePath = `${split.join("\\")}\\${tmpFileName}`;
-  fs.writeFileSync(tmpFilePath, updatedFileAsString, "utf-8");
-  return tmpFilePath;
 }

@@ -13,6 +13,8 @@
         "forceConsistentCasingInFileNames": true
     },
     "files": [
-        "index.ts"
+        "index.ts",
+        "utils/config.ts",
+        "utils/database.ts"
     ]
 }
