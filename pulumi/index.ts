@@ -5,6 +5,7 @@ import * as fs from "fs"
 import * as mime from "mime"
 import * as path from "path"
 import * as config from "./utils/config"
+import * as database from "./utils/database"
 
 const urlReplaceString = "${API_URL}"
 
@@ -42,6 +43,71 @@ const csharpLambda = new aws.lambda.Function("aws-hellolambda-csharp", {
     role: iamForLambda.arn
 });
 
+const vpc = new aws.ec2.Vpc("my-vpc", {
+  cidrBlock: "10.0.0.0/16",
+  enableDnsHostnames: true,
+});
+
+const securityGroup = new aws.ec2.SecurityGroup("my-securitygroup", {
+  ingress: [
+    { protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: [ "0.0.0.0/0" ] },
+    { protocol: "TCP", fromPort: 1433, toPort: 1433, cidrBlocks: [ "0.0.0.0/0" ] }
+    ],
+  egress: [
+    { protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: [ "0.0.0.0/0", ] },
+    { protocol: "TCP", fromPort: 1433, toPort: 1433, cidrBlocks: [ "0.0.0.0/0", ] }
+  ],
+  vpcId: vpc.id,
+})
+
+const internetGateway = new aws.ec2.InternetGateway("my-internetgateway", {
+  vpcId: vpc.id,
+})
+
+const subnetRoute = new aws.ec2.RouteTable("my-internetRoute", {
+  vpcId: vpc.id,
+  routes: [
+    {
+      cidrBlock: "0.0.0.0/0",
+      gatewayId: internetGateway.id
+    }
+  ]
+})
+
+const association = new aws.ec2.MainRouteTableAssociation("my-mainRouteAssociation", {
+  vpcId: vpc.id,
+  routeTableId: subnetRoute.id,
+})
+
+const subnet1 = new aws.ec2.Subnet("my-subnet", {
+  vpcId: vpc.id,
+  cidrBlock: "10.0.0.0/24",
+  availabilityZone: "us-west-2a",
+  mapPublicIpOnLaunch: true,
+})
+
+const subnet2 = new aws.ec2.Subnet("my-subnet2", {
+  vpcId: vpc.id,
+  cidrBlock: "10.0.1.0/24",
+  availabilityZone: "us-west-2b",
+  mapPublicIpOnLaunch: false,
+})
+
+const subnet3 = new aws.ec2.Subnet("my-subnet3", {
+  vpcId: vpc.id,
+  cidrBlock: "10.0.2.0/24",
+  availabilityZone: "us-west-2c",
+  mapPublicIpOnLaunch: false,
+})
+
+const subnetGroup = new aws.rds.SubnetGroup("my-subnetgroup", {
+  subnetIds: [
+    subnet1.id,
+    subnet2.id,
+    subnet3.id,
+  ]
+})
+
 const rds = new aws.rds.Instance("my-rds", {
   allocatedStorage: 20,
   engine: "sqlserver-ex",
@@ -50,7 +116,13 @@ const rds = new aws.rds.Instance("my-rds", {
   password: "foobarbaz",
   storageType: "gp2",
   username: "foo",
-})
+  vpcSecurityGroupIds: [
+    securityGroup.id
+  ],
+  dbSubnetGroupName: subnetGroup.name,
+  skipFinalSnapshot: true,
+  publiclyAccessible: true,
+});
 
 exports.rdsEndpoint = rds.endpoint;
 
